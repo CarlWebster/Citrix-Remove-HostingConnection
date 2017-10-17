@@ -1,7 +1,6 @@
 # Remove-HostingConnection
 	Removes a hosting connection in a Citrix XenDesktop 7.xx Site.
 
-DESCRIPTION
 	Removes either:
 	
 		A hosting connection and all resource connections in a Citrix 
