@@ -1,7 +1,7 @@
 # Remove-HostingConnection
 	Removes a hosting connection in a Citrix XenDesktop 7.xx Site.
 
-	Removes either:
+		Removes either:
 	
 		A hosting connection and all resource connections in a Citrix 
 		XenDesktop 7.xx Site if there are any active provisioning tasks, or
@@ -19,6 +19,8 @@
 	
 	Logs all actions to the Configuration Logging database.
 	
-	NOTE - If there are no active tasks for the hosting connection selected, 
+	If there are no active tasks for the hosting connection selected, 
 	then NOTHING is removed from the Site. The script will state there were
 	no active tasks found and end.
+	
+	Supports WhatIf and Confirm. 
