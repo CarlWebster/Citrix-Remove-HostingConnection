@@ -28,7 +28,9 @@
 	then NOTHING is removed from the Site. The script will state there were
 	no active tasks found and end.
 	
-	Supports WhatIf and Confirm. 
+	Supports WhatIf and Confirm thanks to @adbertram for his clear and simple articles.
+	https://4sysops.com/archives/the-powershell-whatif-parameter/
+	https://4sysops.com/archives/confirm-confirmpreference-and-confirmimpact-in-powershell/
 	
 .PARAMETER AdminAddress
 	Specifies the address of a XenDesktop controller the PowerShell snapins will connect to. 
@@ -45,30 +47,30 @@
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1
 	
-	Display a lit of all hosting connections in the Site.
+	Display a list of all hosting connections in the Site.
 	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provising tasks are removed, the resource connections and hosting connection are removed.
+	Once all provisioning tasks are removed, the resource connections and hosting connection are removed.
 	The computer running the script for the AdminAddress.
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1 -AdminAddress DDC715
 	
-	Display a lit of all hosting connections in the Site.
+	Display a list of all hosting connections in the Site.
 	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
 	Once all provisioning tasks are removed, the resource connections and hosting connection are removed.
 	DDC715 for the AdminAddress.
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1 -ResourceConnectionOnly
 	
-	Display a lit of all hosting connections in the Site.
+	Display a list of all hosting connections in the Site.
 	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
 	Once all provisioning tasks are removed, only the resource connections are removed.
 	The computer running the script for the AdminAddress.
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1 -RCO -AA DDC715
 	
-	Display a lit of all hosting connections in the Site.
+	Display a list of all hosting connections in the Site.
 	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provising tasks are removed, only the resource connections are removed.
+	Once all provisioning tasks are removed, only the resource connections are removed.
 	DDC715 for the AdminAddress.
 .INPUTS
 	None.  You cannot pipe objects to this script.
@@ -120,6 +122,92 @@ $SaveEAPreference = $ErrorActionPreference
 $ErrorActionPreference = 'SilentlyContinue'
 $ConfirmPreference = "High"
 
+Function TestAdminAddress
+{
+	Param([string]$Cname)
+	
+	#if computer name is an IP address, get host name from DNS
+	#http://blogs.technet.com/b/gary/archive/2009/08/29/resolve-ip-addresses-to-hostname-using-powershell.aspx
+	#help from Michael B. Smith
+	$ip = $CName -as [System.Net.IpAddress]
+	If($ip)
+	{
+		$Result = [System.Net.Dns]::gethostentry($ip)
+		
+		If($? -and $Null -ne $Result)
+		{
+			$CName = $Result.HostName
+			Write-Host -ForegroundColor Yellow  "Delivery Controller has been renamed from $ip to $CName"
+		}
+		Else
+		{
+			$ErrorActionPreference = $SaveEAPreference
+			Write-Error "`n`n`t`tUnable to resolve $CName to a hostname.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
+			Exit
+		}
+	}
+
+	If(![String]::IsNullOrEmpty($CName)) 
+	{
+		#get computer name
+		#first test to make sure the computer is reachable
+		Write-Host -ForegroundColor Yellow  "Testing to see if $CName is online and reachable"
+		If(Test-Connection -ComputerName $CName -quiet)
+		{
+			Write-Host -ForegroundColor Yellow  "Server $CName is online."
+			Write-Host -ForegroundColor Yellow  "Testing to see if $CName is a Delivery Controller"
+			
+			$results = (Get-BrokerServiceStatus -adminaddress $cname).ServiceStatus
+			If($? -and $results -eq "Ok")
+			{
+				#the computer is a Delivery Controller
+				Write-Host -ForegroundColor Yellow  "Computer $CName is a Delivery Controller"
+				Return $CName
+			}
+			ElseIf(!$? -or $Null -eq $results)
+			{
+				#the computer is not a Delivery Controller
+				Write-Host -ForegroundColor Yellow  "Computer $CName is not a Delivery Controller"
+				$ErrorActionPreference = $SaveEAPreference
+				Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
+				Exit
+			}
+		}
+		Else
+		{
+			Write-Host -ForegroundColor Yellow  "Server $CName is offline"
+			$ErrorActionPreference = $SaveEAPreference
+			Write-Error "`n`n`t`tDelivery Controller $CName is offline.`n`t`tScript cannot continue.`n`n"
+			Exit
+		}
+	}
+
+	#if computer name is localhost, get actual computer name
+	If($CName -eq "localhost")
+	{
+		$CName = $env:ComputerName
+		Write-Host -ForegroundColor Yellow  "Delivery Controller has been renamed from localhost to $CName"
+		Write-Host -ForegroundColor Yellow  "Testing to see if $CName is a Delivery Controller"
+		$results = (Get-BrokerServiceStatus -adminaddress $cname).ServiceStatus
+		If($? -and $results -eq "Ok")
+		{
+			#the computer is a Delivery Controller
+			Write-Host -ForegroundColor Yellow  "Computer $CName is a Delivery Controller"
+			Return $CName
+		}
+		ElseIf(!$? -or $Null -eq $results)
+		{
+			#the computer is not a Delivery Controller
+			Write-Host -ForegroundColor Yellow  "Computer $CName is not a Delivery Controller"
+			$ErrorActionPreference = $SaveEAPreference
+			Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
+			Exit
+		}
+	}
+
+	Return $CName
+}
+
 Function Check-NeededPSSnapins
 {
 	Param([parameter(Mandatory = $True)][alias("Snapin")][string[]]$Snapins)
@@ -137,10 +225,10 @@ Function Check-NeededPSSnapins
 	ForEach($Snapin in $Snapins)
 	{
 		#check if the snapin is loaded
-		If(!($LoadedSnapins -like $snapin))
+		If(!($LoadedSnapins -contains $snapin))
 		{
 			#Check if the snapin is missing
-			If(!($RegisteredSnapins -like $Snapin))
+			If(!($RegisteredSnapins -contains $Snapin))
 			{
 				#set the flag if it's not already
 				If(!($FoundMissingSnapin))
@@ -180,7 +268,7 @@ If(!(Check-NeededPSSnapins "Citrix.Broker.Admin.V2",
 	$ErrorActionPreference = $SaveEAPreference
 	Write-Error "`nMissing Citrix PowerShell Snap-ins Detected, check the console above for more information. 
 	`nAre you sure you are running this script against a XenDesktop 7.x Controller? 
-	`n`nIf you are running the script remotely, did you install Studio or the PowerShell snapins on $($env:computername)?
+	`n`nIf you are running the script remotely, did you install Studio or the PowerShell snapins on $env:computername?
 	`n
 	`nThe script requires the following snapins:
 	`n
@@ -194,6 +282,10 @@ If(!(Check-NeededPSSnapins "Citrix.Broker.Admin.V2",
 	`n`n"
 	Exit
 }
+#endregion
+
+#region test AdminAddress
+$AdminAddress = TestAdminAddress $AdminAddress
 #endregion
 
 #region script part 1
@@ -239,12 +331,12 @@ If($? -and $Null -ne $HostingConnections)
 }
 ElseIf($? -and $Null -eq $HostingConnections)
 {
-	Write-Host "There were no hosting connections found. Script will now close."
+	Write-Warning "There were no hosting connections found. Script will now close."
 	Exit
 }
 Else
 {
-	Write-Host "Unable to retrieve hosting connections. Script will now close."
+	Write-Error "Unable to retrieve hosting connections. Script will now close."
 	Exit
 }
 #endregion
@@ -271,8 +363,10 @@ If($? -and $Null -ne $HostingUnits)
 			$ActiveTask = $Null
 			$Results = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.HostingUnitUid -eq $HostingUnit.HostingUnitUid -and $_.Active -eq $True} 4>$Null
 
+			[bool]$ActionStatus = $?
+			
 			#only one hosting connection should have an active task since you can only select one via the Studio wizard
-			If($? -and $Null -ne $Results)
+			If($ActionStatus -and $Null -ne $Results)
 			{
 				$ActiveTask += $Results
 				$SavedHostingUnitUid = $HostingUnit.HostingUnitUid
@@ -283,6 +377,8 @@ If($? -and $Null -ne $HostingUnits)
 	{
 		#only one hosting connection found
 		$ActiveTask = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.HostingUnitUid -eq $HostingUnits.HostingUnitUid -and $_.Active -eq $True} 4>$Null
+		[bool]$ActionStatus = $?
+		
 		$SavedHostingUnitUid = $HostingUnits.HostingUnitUid
 	}
 }
@@ -305,11 +401,11 @@ Else
 #endregion
 
 #region script part 3
-If($? -and $Null -ne $ActiveTask)
+If($ActionStatus -and $Null -ne $ActiveTask)
 {
-	While($? -and $Null -ne $ActiveTask)
+	While($ActionStatus -and $Null -ne $ActiveTask)
 	{
-		#Get-ProvTask $True only returns one task ragrdless of the number of tasks that exist
+		#Get-ProvTask $True only returns one task regardless of the number of tasks that exist
 		Write-Host -ForegroundColor Yellow "Active task $($ActiveTask.TaskId) found"
 
 		###############
@@ -368,12 +464,12 @@ If($? -and $Null -ne $ActiveTask)
 			If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Remove Provisioning Task'))
 			{
 				Remove-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
-			}
-			
-			If($?)
-			{
-				$Succeeded = $True
-				Write-Host -ForegroundColor Yellow "Removed task $($ActiveTask.TaskId)"
+
+				If($?)
+				{
+					$Succeeded = $True
+					Write-Host -ForegroundColor Yellow "Removed task $($ActiveTask.TaskId)"
+				}
 			}
 		}
 		
@@ -390,12 +486,13 @@ If($? -and $Null -ne $ActiveTask)
 		
 		#keep looping until all active tasks are found, stopped and removed
 		$ActiveTask = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.hostingunit -eq $RemoveThis.HostingUnitUid -and $_.Active -eq $True}
+		[bool]$ActionStatus = $?
 	}
 	
 	#all tasks have been stopped and removed so now the hosting and resource connections can be removed
 	
 	#get all resource connections as there can be more than one per hosting connection
-	$ResourceConnections = Get-ChildItem -AdminAddress $AdminAddress -path 'xdhyp:\hostingunits' | Where-Object {$_.HypervisorConnection.HypervisorConnectionName -eq $RemoveThis}
+	$ResourceConnections = $HostingUnits
 	
 	If($? -and $Null -ne $ResourceConnections)
 	{
@@ -421,12 +518,12 @@ If($? -and $Null -ne $ActiveTask)
 					If($PSCmdlet.ShouldProcess("xdhyp:\HostingUnits\$ResourceConnection",'Remove resource connection'))
 					{
 						Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\HostingUnits\$ResourceConnection" -LoggingId $HighLevelOp.Id -EA 0		
-					}
-					
-					If($?)
-					{
-						$Succeeded = $True
-						Write-Host -ForegroundColor Yellow "Removed resource connection item xdhyp:\HostingUnits\$ResourceConnection"
+						
+						If($?)
+						{
+							$Succeeded = $True
+							Write-Host -ForegroundColor Yellow "Removed resource connection item xdhyp:\HostingUnits\$ResourceConnection"
+						}
 					}
 				}
 				
@@ -473,12 +570,12 @@ If($? -and $Null -ne $ActiveTask)
 			If($PSCmdlet.ShouldProcess("xdhyp:\Connections\$RemoveThis",'Remove hosting connection'))
 			{
 				Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\Connections\$RemoveThis" -LoggingId $HighLevelOp.Id -EA 0		
-			}
-			
-			If($?)
-			{
-				$Succeeded = $True
-				Write-Host -ForegroundColor Yellow "Removed hosting connection item xdhyp:\Connections\$RemoveThis"
+				
+				If($?)
+				{
+					$Succeeded = $True
+					Write-Host -ForegroundColor Yellow "Removed hosting connection item xdhyp:\Connections\$RemoveThis"
+				}
 			}
 		}
 		
@@ -511,12 +608,12 @@ If($? -and $Null -ne $ActiveTask)
 			If($PSCmdlet.ShouldProcess($RemoveThis,'Remove broker hypervisor connection'))
 			{
 				Remove-BrokerHypervisorConnection -Name $RemoveThis -AdminAddress $AdminAddress -LoggingId $HighLevelOp.Id -EA 0	
-			}
 			
-			If($?)
-			{
-				$Succeeded = $True
-				Write-Host -ForegroundColor Yellow "Removed Broker Hypervisor Connection $RemoveThis"
+				If($?)
+				{
+					$Succeeded = $True
+					Write-Host -ForegroundColor Yellow "Removed Broker Hypervisor Connection $RemoveThis"
+				}
 			}
 		}
 		
@@ -541,10 +638,10 @@ If($? -and $Null -ne $ActiveTask)
 }
 ElseIf($? -and $Null -eq $ActiveTask)
 {
-	Write-Host "There were no active tasks found"
+	Write-Warning "There were no active tasks found"
 }
 Else
 {
-	Write-Host "Unable to retrieve active tasks"
+	Write-Error "Unable to retrieve active tasks"
 }
 #endregion
