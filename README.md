@@ -1,6 +1,4 @@
 # Remove-HostingConnection
-	Removes a hosting connection in a Citrix XenDesktop 7.xx Site.
-
 		Removes either:
 	
 		A hosting connection and all resource connections in a Citrix 
@@ -23,4 +21,8 @@
 	then NOTHING is removed from the Site. The script will state there were
 	no active tasks found and end.
 	
-	Supports WhatIf and Confirm. 
+	Supports WhatIf and Confirm thanks to @adbertram for his clear and simple articles.
+	https://4sysops.com/archives/the-powershell-whatif-parameter/
+	https://4sysops.com/archives/confirm-confirmpreference-and-confirmimpact-in-powershell/
+	
+	Thanks to Michael B. Smith for the code review.
