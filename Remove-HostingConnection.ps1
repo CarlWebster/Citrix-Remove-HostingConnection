@@ -32,13 +32,15 @@
 	https://4sysops.com/archives/the-powershell-whatif-parameter/
 	https://4sysops.com/archives/confirm-confirmpreference-and-confirmimpact-in-powershell/
 	
+	Thanks to Michael B. Smith for the code review.
+	
 .PARAMETER AdminAddress
 	Specifies the address of a XenDesktop controller the PowerShell snapins will connect to. 
 	This can be provided as a host name or an IP address. 
 	This parameter defaults to LocalHost.
 	This parameter has an alias of AA.
 .PARAMETER ResourceConnectionOnly
-	Specifies that only the resource connection that has the active tasks 
+	Specifies that only the resource connection that has the active task(s) 
 	should be deleted.
 	Do NOT delete the hosting connection or the Broker's hypervisor connection.
 	This parameter defaults to False which means all resource and hosting 
@@ -63,14 +65,14 @@
 	
 	Display a list of all hosting connections in the Site.
 	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provisioning tasks are removed, only the resource connections are removed.
+	Once all provisioning tasks are removed, only the resource connection is removed.
 	The computer running the script for the AdminAddress.
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1 -RCO -AA DDC715
 	
 	Display a list of all hosting connections in the Site.
 	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provisioning tasks are removed, only the resource connections are removed.
+	Once all provisioning tasks are removed, only the resource connection is removed.
 	DDC715 for the AdminAddress.
 .INPUTS
 	None.  You cannot pipe objects to this script.
@@ -81,14 +83,14 @@
 .NOTES
 	NAME: Remove-HostingConnection.ps1
 	VERSION: 1.00
-	AUTHOR: Carl Webster
-	LASTEDIT: October 18, 2017
+	AUTHOR: Carl Webster, Sr. Solutions Architect for Choice Solutions, LLC
+	LASTEDIT: October 19, 2017
 #>
 
 #endregion
 
 #region script parameters
-[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = "High")]
+[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = "Medium")]
 
 Param(
 	[parameter(Mandatory=$False)] 
@@ -107,7 +109,7 @@ Param(
 #region script change log	
 #webster@carlwebster.com
 #@carlwebster on Twitter
-#Sr. Solutions Architect, Choice Solutions, LLC
+#Sr. Solutions Architect for Choice Solutions, LLC
 #http://www.CarlWebster.com
 #Created on September 26, 2017
 
@@ -426,12 +428,12 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 			If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Stop Provisioning Task'))
 			{
 				Stop-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
-			}
-			
-			If($?)
-			{
-				$Succeeded = $True
-				Write-Host -ForegroundColor Yellow "Stopped task $($ActiveTask.TaskId)"
+				
+				If($?)
+				{
+					$Succeeded = $True
+					Write-Host -ForegroundColor Yellow "Stopped task $($ActiveTask.TaskId)"
+				}
 			}
 		}
 		
