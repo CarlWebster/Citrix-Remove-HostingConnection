@@ -139,7 +139,7 @@ Function TestAdminAddress
 		If($? -and $Null -ne $Result)
 		{
 			$CName = $Result.HostName
-			Write-Host -ForegroundColor Yellow  "Delivery Controller has been renamed from $ip to $CName"
+			Write-Host -ForegroundColor Yellow "Delivery Controller has been renamed from $ip to $CName"
 		}
 		Else
 		{
@@ -153,31 +153,29 @@ Function TestAdminAddress
 	{
 		#get computer name
 		#first test to make sure the computer is reachable
-		Write-Host -ForegroundColor Yellow  "Testing to see if $CName is online and reachable"
+		Write-Host -ForegroundColor Yellow "Testing to see if $CName is online and reachable"
 		If(Test-Connection -ComputerName $CName -quiet)
 		{
-			Write-Host -ForegroundColor Yellow  "Server $CName is online."
-			Write-Host -ForegroundColor Yellow  "Testing to see if $CName is a Delivery Controller"
+			Write-Host -ForegroundColor Yellow "Server $CName is online."
+			Write-Host -ForegroundColor Yellow "Testing to see if $CName is a Delivery Controller"
 			
-			$results = (Get-BrokerServiceStatus -adminaddress $cname).ServiceStatus
-			If($? -and $results -eq "Ok")
+			$result = Get-BrokerServiceStatus -adminaddress $cname
+			If($? -and $result.ServiceStatus -eq "Ok")
 			{
 				#the computer is a Delivery Controller
-				Write-Host -ForegroundColor Yellow  "Computer $CName is a Delivery Controller"
+				Write-Host -ForegroundColor Yellow "Computer $CName is a Delivery Controller"
 				Return $CName
 			}
-			ElseIf(!$? -or $Null -eq $results)
-			{
-				#the computer is not a Delivery Controller
-				Write-Host -ForegroundColor Yellow  "Computer $CName is not a Delivery Controller"
-				$ErrorActionPreference = $SaveEAPreference
-				Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
-				Exit
-			}
+			
+			#the computer is not a Delivery Controller
+			Write-Host -ForegroundColor Yellow "Computer $CName is not a Delivery Controller"
+			$ErrorActionPreference = $SaveEAPreference
+			Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
+			Exit
 		}
 		Else
 		{
-			Write-Host -ForegroundColor Yellow  "Server $CName is offline"
+			Write-Host -ForegroundColor Yellow "Server $CName is offline"
 			$ErrorActionPreference = $SaveEAPreference
 			Write-Error "`n`n`t`tDelivery Controller $CName is offline.`n`t`tScript cannot continue.`n`n"
 			Exit
@@ -188,23 +186,21 @@ Function TestAdminAddress
 	If($CName -eq "localhost")
 	{
 		$CName = $env:ComputerName
-		Write-Host -ForegroundColor Yellow  "Delivery Controller has been renamed from localhost to $CName"
-		Write-Host -ForegroundColor Yellow  "Testing to see if $CName is a Delivery Controller"
-		$results = (Get-BrokerServiceStatus -adminaddress $cname).ServiceStatus
-		If($? -and $results -eq "Ok")
+		Write-Host -ForegroundColor Yellow "Delivery Controller has been renamed from localhost to $CName"
+		Write-Host -ForegroundColor Yellow "Testing to see if $CName is a Delivery Controller"
+		$result = Get-BrokerServiceStatus -adminaddress $cname
+		If($? -and $result.ServiceStatus -eq "Ok")
 		{
 			#the computer is a Delivery Controller
-			Write-Host -ForegroundColor Yellow  "Computer $CName is a Delivery Controller"
+			Write-Host -ForegroundColor Yellow "Computer $CName is a Delivery Controller"
 			Return $CName
 		}
-		ElseIf(!$? -or $Null -eq $results)
-		{
-			#the computer is not a Delivery Controller
-			Write-Host -ForegroundColor Yellow  "Computer $CName is not a Delivery Controller"
-			$ErrorActionPreference = $SaveEAPreference
-			Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
-			Exit
-		}
+		
+		#the computer is not a Delivery Controller
+		Write-Host -ForegroundColor Yellow "Computer $CName is not a Delivery Controller"
+		$ErrorActionPreference = $SaveEAPreference
+		Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
+		Exit
 	}
 
 	Return $CName
@@ -292,7 +288,21 @@ $AdminAddress = TestAdminAddress $AdminAddress
 
 #region script part 1
 Write-Host
-$HostingConnections = (Get-BrokerHypervisorConnection -AdminAddress $AdminAddress).Name
+$Results = Get-BrokerHypervisorConnection -AdminAddress $AdminAddress
+
+If(!$?)
+{
+	Write-Error "Unable to retrieve hosting connections. Script will now close."
+	Exit
+}
+
+If($Null -eq $Results)
+{
+	Write-Warning "There were no hosting connections found. Script will now close."
+	Exit
+}
+
+$HostingConnections = $results |% { %_.Name }
 
 If($? -and $Null -ne $HostingConnections)
 {
@@ -331,16 +341,6 @@ If($? -and $Null -ne $HostingConnections)
 		Exit
 	}
 }
-ElseIf($? -and $Null -eq $HostingConnections)
-{
-	Write-Warning "There were no hosting connections found. Script will now close."
-	Exit
-}
-Else
-{
-	Write-Error "Unable to retrieve hosting connections. Script will now close."
-	Exit
-}
 #endregion
 
 #region script part 2
@@ -350,49 +350,7 @@ $Error.Clear()
 Write-Host -ForegroundColor Yellow "Retrieving Host Connection $RemoveThis"
 $HostingUnits = Get-ChildItem -AdminAddress $AdminAddress -path 'xdhyp:\hostingunits' | Where-Object {$_.HypervisorConnection.HypervisorConnectionName -eq $RemoveThis} 
 
-If($? -and $Null -ne $HostingUnits)
-{
-	#save the HostingUnitUid to use later
-	$SavedHostingUnitUid = ""
-	#Get-ProvTask with Active -eq True only returns one result regardless of the number of active tasks
-	Write-Host -ForegroundColor Yellow "Retrieving Active Provisioning Tasks"
-	
-	If($HostingUnits -is[array])
-	{
-		#multiple hosting connections found
-		ForEach($HostingUnit in $HostingUnits)
-		{
-			$ActiveTask = $Null
-			$Results = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.HostingUnitUid -eq $HostingUnit.HostingUnitUid -and $_.Active -eq $True} 4>$Null
-
-			[bool]$ActionStatus = $?
-			
-			#only one hosting connection should have an active task since you can only select one via the Studio wizard
-			If($ActionStatus -and $Null -ne $Results)
-			{
-				$ActiveTask += $Results
-				$SavedHostingUnitUid = $HostingUnit.HostingUnitUid
-			}
-		}
-	}
-	Else
-	{
-		#only one hosting connection found
-		$ActiveTask = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.HostingUnitUid -eq $HostingUnits.HostingUnitUid -and $_.Active -eq $True} 4>$Null
-		[bool]$ActionStatus = $?
-		
-		$SavedHostingUnitUid = $HostingUnits.HostingUnitUid
-	}
-}
-ElseIf($? -and $Null -eq $HostingUnits)
-{
-	#we should never get here
-	Write-Host "There were no hosting connections found. You shouldn't be here! Script will close."
-	Write-Host "If you get this message, please email webster@carlwebster.com" -ForegroundColor Red
-	$error
-	Exit
-}
-Else
+If(!$?)
 {
 	#we should never get here
 	Write-Host "Unable to retrieve hosting connections. You shouldn't be here! Script will close."
@@ -400,9 +358,71 @@ Else
 	$error
 	Exit
 }
+
+If($Null -eq $HostingUnits)
+{
+	#we should never get here
+	Write-Host "There were no hosting connections found. You shouldn't be here! Script will close."
+	Write-Host "If you get this message, please email webster@carlwebster.com" -ForegroundColor Red
+	$error
+	Exit
+}
+
+#save the HostingUnitUid to use later
+$SavedHostingUnitUid = ""
+#Get-ProvTask with Active -eq True only returns one result regardless of the number of active tasks
+Write-Host -ForegroundColor Yellow "Retrieving Active Provisioning Tasks"
+
+If($HostingUnits -is[array])
+{
+	#multiple hosting connections found
+	ForEach($HostingUnit in $HostingUnits)
+	{
+		$ActiveTask = $Null
+		$Results = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.HostingUnitUid -eq $HostingUnit.HostingUnitUid -and $_.Active -eq $True} 4>$Null
+
+		[bool]$ActionStatus = $?
+		
+		#only one hosting connection should have an active task since you can only select one via the Studio wizard
+		If($ActionStatus -and $Null -ne $Results)
+		{
+			$ActiveTask += $Results
+			$SavedHostingUnitUid = $HostingUnit.HostingUnitUid
+		}
+	}
+}
+Else
+{
+	#only one hosting connection found
+	$ActiveTask = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.HostingUnitUid -eq $HostingUnits.HostingUnitUid -and $_.Active -eq $True} 4>$Null
+	[bool]$ActionStatus = $?
+	
+	$SavedHostingUnitUid = $HostingUnits.HostingUnitUid
+}
 #endregion
 
 #region script part 3
+If($Null -eq $ActiveTask)
+{
+	Write-Warning "There were no active tasks found. Script will close."
+	Exit
+}
+
+If(!$?)
+{
+	Write-Error "Unable to retrieve active tasks. Script will close."
+	Exit
+}
+
+If(!$ActionStatus)
+{
+	#we should never get here
+	Write-Host "There was an error retrieving active tasks. You shouldn't be here! Script will close."
+	Write-Host "If you get this message, please email webster@carlwebster.com" -ForegroundColor Red
+	$error
+	Exit
+}
+
 If($ActionStatus -and $Null -ne $ActiveTask)
 {
 	While($ActionStatus -and $Null -ne $ActiveTask)
@@ -414,9 +434,9 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		#STOP THE TASK#
 		###############
 		
-		$Succeeded = $False #will indicate if the high level operation was successful
+		$Succeeded = $False #will indicate if the high-level operation was successful
 		
-		# Log high level operation start.
+		# Log high-level operation start.
 		$HighLevelOp = Start-LogHighLevelOperation -Text "Stop-ProvTask TaskId $($ActiveTask.TaskId)" `
 		-Source "Remove-HostingConnection Script" `
 		-OperationType AdminActivity `
@@ -444,7 +464,7 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		
 		Finally
 		{
-			# Log high level operation stop, and indicate its success
+			# Log high-level operation stop, and indicate its success
 			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
 		}
 		
@@ -452,9 +472,9 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		#REMOVE THE TASK#
 		#################
 
-		$Succeeded = $False #will indicate if the high level operation was successful
+		$Succeeded = $False #will indicate if the high-level operation was successful
 
-		# Log high level operation start.
+		# Log high-level operation start.
 		$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-ProvTask TaskId $($ActiveTask.TaskId)" `
 		-Source "Remove-HostingConnection Script" `
 		-OperationType AdminActivity `
@@ -482,7 +502,7 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		
 		Finally
 		{
-			# Log high level operation stop, and indicate its success
+			# Log high-level operation stop, and indicate its success
 			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
 		}
 		
@@ -506,9 +526,9 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 				#REMOVE THE RESOURCE CONNECTION#
 				################################
 				
-				$Succeeded = $False #will indicate if the high level operation was successful
+				$Succeeded = $False #will indicate if the high-level operation was successful
 
-				# Log high level operation start.
+				# Log high-level operation start.
 				$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\HostingUnits\$ResourceConnection" `
 				-Source "Remove-HostingConnection Script" `
 				-OperationType ConfigurationChange `
@@ -536,7 +556,7 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 				
 				Finally
 				{
-					# Log high level operation stop, and indicate its success
+					# Log high-level operation stop, and indicate its success
 					Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
 				}
 			}
@@ -558,9 +578,9 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		#REMOVE THE HOSTING CONNECTION#
 		###############################
 
-		$Succeeded = $False #will indicate if the high level operation was successful
+		$Succeeded = $False #will indicate if the high-level operation was successful
 
-		# Log high level operation start.
+		# Log high-level operation start.
 		$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\Connections\$RemoveThis" `
 		-Source "Remove-HostingConnection Script" `
 		-OperationType ConfigurationChange `
@@ -588,7 +608,7 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		
 		Finally
 		{
-			# Log high level operation stop, and indicate its success
+			# Log high-level operation stop, and indicate its success
 			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
 		}
 		
@@ -596,9 +616,9 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		#REMOVE THE BROKER HYPERVISOR CONNECTION#
 		#########################################
 
-		$Succeeded = $False #will indicate if the high level operation was successful
+		$Succeeded = $False #will indicate if the high-level operation was successful
 
-		# Log high level operation start.
+		# Log high-level operation start.
 		$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-BrokerHypervisorConnection $RemoveThis" `
 		-Source "Remove-HostingConnection Script" `
 		-OperationType ConfigurationChange `
@@ -626,7 +646,7 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 		
 		Finally
 		{
-			# Log high level operation stop, and indicate its success
+			# Log high-level operation stop, and indicate its success
 			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
 		}
 
@@ -637,13 +657,5 @@ If($ActionStatus -and $Null -ne $ActiveTask)
 
 	Write-Host "Script completed"
 	
-}
-ElseIf($? -and $Null -eq $ActiveTask)
-{
-	Write-Warning "There were no active tasks found"
-}
-Else
-{
-	Write-Error "Unable to retrieve active tasks"
 }
 #endregion
