@@ -302,7 +302,7 @@ If($Null -eq $Results)
 	Exit
 }
 
-$HostingConnections = $results |% { %_.Name }
+$HostingConnections = $results |% { $_.Name }
 
 If($? -and $Null -ne $HostingConnections)
 {
