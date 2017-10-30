@@ -32,11 +32,29 @@
 	https://4sysops.com/archives/the-powershell-whatif-parameter/
 	https://4sysops.com/archives/confirm-confirmpreference-and-confirmimpact-in-powershell/
 	
-	Thanks to Michael B. Smith for the code review.
+	Thanks to Michael B. Smith for the code review. @essentialexch on Twitter
+	
+	******************************************************************************
+	*   WARNING             WARNING      	       WARNING             WARNING   *
+	******************************************************************************
+	
+	Do not run this script when there are valid active provisioning tasks processing.
+
+	Because of the way the Get-ProvTask cmdlet works, this script retrieves the
+	first task where the Active property is TRUE, regardless of whether the task
+	is a current task or an old task left in the system.
+
+	This script will remove the first active task it finds and then, depending on
+	the -ResourceConnectionOnly switch, will attempt to delete all resource connections 
+	in a hosting connection and then attempt to delete the hosting connection.
+	
+	******************************************************************************
+	*   WARNING             WARNING      	       WARNING             WARNING   *
+	******************************************************************************
 	
 .PARAMETER AdminAddress
 	Specifies the address of a XenDesktop controller the PowerShell snapins will connect to. 
-	This can be provided as a host name or an IP address. 
+	This can be provided as a hostname or an IP address. 
 	This parameter defaults to LocalHost.
 	This parameter has an alias of AA.
 .PARAMETER ResourceConnectionOnly
@@ -49,42 +67,57 @@
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1
 	
+	The computer running the script for the AdminAddress (LocalHost by default).
+	Change LocalHost to the name of the computer ($env:ComputerName).
+	Verify the computer is a Delivery Controller. If not, end the script.
 	Display a list of all hosting connections in the Site.
-	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provisioning tasks are removed, the resource connections and hosting connection are removed.
-	The computer running the script for the AdminAddress.
+	Once a hosting connection is selected, all provisioning tasks are stopped 
+	and removed.
+	Objects are removed in this order: provisioning tasks, resource connections, 
+	the hosting connection.
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1 -AdminAddress DDC715
 	
-	Display a list of all hosting connections in the Site.
-	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provisioning tasks are removed, the resource connections and hosting connection are removed.
 	DDC715 for the AdminAddress.
+	Verify DDC715 is a Delivery Controller. If not, end the script.
+	Display a list of all hosting connections in the Site.
+	Once a hosting connection is selected, all provisioning tasks are stopped 
+	and removed.
+	Objects are removed in this order: provisioning tasks, resource connections, 
+	the hosting connection.
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1 -ResourceConnectionOnly
 	
+	The computer running the script for the AdminAddress (LocalHost by default).
+	Change LocalHost to the name of the computer ($env:ComputerName).
+	Verify the computer is a Delivery Controller. If not, end the script.
 	Display a list of all hosting connections in the Site.
-	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provisioning tasks are removed, only the resource connection is removed.
-	The computer running the script for the AdminAddress.
+	Once a hosting connection is selected, all provisioning tasks are stopped 
+	and removed.
+	Once all provisioning tasks are removed, only the resource connection 
+	is removed.
 .EXAMPLE
 	PS C:\PSScript > .\Remove-HostingConnection.ps1 -RCO -AA DDC715
 	
-	Display a list of all hosting connections in the Site.
-	Once a hosting connection is selected, all provisioning tasks are stopped and removed.
-	Once all provisioning tasks are removed, only the resource connection is removed.
 	DDC715 for the AdminAddress.
+	Verify DDC715 is a Delivery Controller. If not, end the script.
+	Display a list of all hosting connections in the Site.
+	Once a hosting connection is selected, all provisioning tasks are stopped 
+	and removed.
+	Once all provisioning tasks are removed, only the resource connection is 
+	removed.
 .INPUTS
 	None.  You cannot pipe objects to this script.
 .OUTPUTS
 	No objects are output from this script.
 .LINK
 	http://carlwebster.com/unable-delete-citrix-xenappxendesktop-7-xx-hosting-connection-resource-currently-active-background-action/
+	http://carlwebster.com/new-powershell-script-remove-hostingconnection-v1-0/
 .NOTES
 	NAME: Remove-HostingConnection.ps1
 	VERSION: 1.00
 	AUTHOR: Carl Webster, Sr. Solutions Architect for Choice Solutions, LLC
-	LASTEDIT: October 19, 2017
+	LASTEDIT: October 30, 2017
 #>
 
 #endregion
@@ -149,6 +182,27 @@ Function TestAdminAddress
 		}
 	}
 
+	#if computer name is localhost, get actual computer name
+	If($CName -eq "localhost")
+	{
+		$CName = $env:ComputerName
+		Write-Host -ForegroundColor Yellow "Delivery Controller has been renamed from localhost to $CName"
+		Write-Host -ForegroundColor Yellow "Testing to see if $CName is a Delivery Controller"
+		$result = Get-BrokerServiceStatus -adminaddress $cname
+		If($? -and $result.ServiceStatus -eq "Ok")
+		{
+			#the computer is a Delivery Controller
+			Write-Host -ForegroundColor Yellow "Computer $CName is a Delivery Controller"
+			Return $CName
+		}
+		
+		#the computer is not a Delivery Controller
+		Write-Host -ForegroundColor Yellow "Computer $CName is not a Delivery Controller"
+		$ErrorActionPreference = $SaveEAPreference
+		Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
+		Exit
+	}
+
 	If(![String]::IsNullOrEmpty($CName)) 
 	{
 		#get computer name
@@ -180,27 +234,6 @@ Function TestAdminAddress
 			Write-Error "`n`n`t`tDelivery Controller $CName is offline.`n`t`tScript cannot continue.`n`n"
 			Exit
 		}
-	}
-
-	#if computer name is localhost, get actual computer name
-	If($CName -eq "localhost")
-	{
-		$CName = $env:ComputerName
-		Write-Host -ForegroundColor Yellow "Delivery Controller has been renamed from localhost to $CName"
-		Write-Host -ForegroundColor Yellow "Testing to see if $CName is a Delivery Controller"
-		$result = Get-BrokerServiceStatus -adminaddress $cname
-		If($? -and $result.ServiceStatus -eq "Ok")
-		{
-			#the computer is a Delivery Controller
-			Write-Host -ForegroundColor Yellow "Computer $CName is a Delivery Controller"
-			Return $CName
-		}
-		
-		#the computer is not a Delivery Controller
-		Write-Host -ForegroundColor Yellow "Computer $CName is not a Delivery Controller"
-		$ErrorActionPreference = $SaveEAPreference
-		Write-Error "`n`n`t`tComputer $CName is not a Delivery Controller.`n`n`t`tRerun the script using -AdminAddress with a valid Delivery Controller name.`n`n`t`tScript cannot continue.`n`n"
-		Exit
 	}
 
 	Return $CName
@@ -414,248 +447,235 @@ If(!$?)
 	Exit
 }
 
-If(!$ActionStatus)
+While($ActionStatus -and $Null -ne $ActiveTask)
 {
-	#we should never get here
-	Write-Host "There was an error retrieving active tasks. You shouldn't be here! Script will close."
-	Write-Host "If you get this message, please email webster@carlwebster.com" -ForegroundColor Red
-	$error
-	Exit
-}
+	#Get-ProvTask $True only returns one task regardless of the number of tasks that exist
+	Write-Host -ForegroundColor Yellow "Active task $($ActiveTask.TaskId) found"
 
-If($ActionStatus -and $Null -ne $ActiveTask)
-{
-	While($ActionStatus -and $Null -ne $ActiveTask)
+	###############
+	#STOP THE TASK#
+	###############
+	
+	$Succeeded = $False #will indicate if the high-level operation was successful
+	
+	# Log high-level operation start.
+	$HighLevelOp = Start-LogHighLevelOperation -Text "Stop-ProvTask TaskId $($ActiveTask.TaskId)" `
+	-Source "Remove-HostingConnection Script" `
+	-OperationType AdminActivity `
+	-TargetTypes "TaskId $($ActiveTask.TaskId)" `
+	-AdminAddress $AdminAddress
+	
+	Try
 	{
-		#Get-ProvTask $True only returns one task regardless of the number of tasks that exist
-		Write-Host -ForegroundColor Yellow "Active task $($ActiveTask.TaskId) found"
-
-		###############
-		#STOP THE TASK#
-		###############
-		
-		$Succeeded = $False #will indicate if the high-level operation was successful
-		
-		# Log high-level operation start.
-		$HighLevelOp = Start-LogHighLevelOperation -Text "Stop-ProvTask TaskId $($ActiveTask.TaskId)" `
-		-Source "Remove-HostingConnection Script" `
-		-OperationType AdminActivity `
-		-TargetTypes "TaskId $($ActiveTask.TaskId)" `
-		-AdminAddress $AdminAddress
-		
-		Try
+		If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Stop Provisioning Task'))
 		{
-			If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Stop Provisioning Task'))
+			Stop-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
+			
+			If($?)
 			{
-				Stop-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
-				
-				If($?)
-				{
-					$Succeeded = $True
-					Write-Host -ForegroundColor Yellow "Stopped task $($ActiveTask.TaskId)"
-				}
+				$Succeeded = $True
+				Write-Host -ForegroundColor Yellow "Stopped task $($ActiveTask.TaskId)"
 			}
 		}
-		
-		Catch
-		{
-			Write-Warning "Unable to stop task $($ActiveTask.TaskId)"
-		}
-		
-		Finally
-		{
-			# Log high-level operation stop, and indicate its success
-			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
-		}
-		
-		#################
-		#REMOVE THE TASK#
-		#################
-
-		$Succeeded = $False #will indicate if the high-level operation was successful
-
-		# Log high-level operation start.
-		$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-ProvTask TaskId $($ActiveTask.TaskId)" `
-		-Source "Remove-HostingConnection Script" `
-		-OperationType AdminActivity `
-		-TargetTypes "TaskId $($ActiveTask.TaskId)" `
-		-AdminAddress $AdminAddress
-		
-		Try
-		{
-			If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Remove Provisioning Task'))
-			{
-				Remove-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
-
-				If($?)
-				{
-					$Succeeded = $True
-					Write-Host -ForegroundColor Yellow "Removed task $($ActiveTask.TaskId)"
-				}
-			}
-		}
-		
-		Catch
-		{
-			Write-Warning "Unable to remove task $($ActiveTask.TaskId)"
-		}
-		
-		Finally
-		{
-			# Log high-level operation stop, and indicate its success
-			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
-		}
-		
-		#keep looping until all active tasks are found, stopped and removed
-		$ActiveTask = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.hostingunit -eq $RemoveThis.HostingUnitUid -and $_.Active -eq $True}
-		[bool]$ActionStatus = $?
 	}
 	
-	#all tasks have been stopped and removed so now the hosting and resource connections can be removed
-	
-	#get all resource connections as there can be more than one per hosting connection
-	$ResourceConnections = $HostingUnits
-	
-	If($? -and $Null -ne $ResourceConnections)
+	Catch
 	{
-		ForEach($ResourceConnection in $ResourceConnections)
-		{
-			If(($ResourceConnectionOnly -eq $False) -or ($ResourceConnectionOnly -eq $True -and $ResourceConnection.HostingUnitUid -eq $SavedHostingUnitUid))
-			{
-				################################
-				#REMOVE THE RESOURCE CONNECTION#
-				################################
-				
-				$Succeeded = $False #will indicate if the high-level operation was successful
+		Write-Warning "Unable to stop task $($ActiveTask.TaskId)"
+	}
+	
+	Finally
+	{
+		# Log high-level operation stop, and indicate its success
+		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+	}
+	
+	#################
+	#REMOVE THE TASK#
+	#################
 
-				# Log high-level operation start.
-				$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\HostingUnits\$ResourceConnection" `
-				-Source "Remove-HostingConnection Script" `
-				-OperationType ConfigurationChange `
-				-TargetTypes "xdhyp:\HostingUnits\$ResourceConnection" `
-				-AdminAddress $AdminAddress
-				
-				Try
+	$Succeeded = $False #will indicate if the high-level operation was successful
+
+	# Log high-level operation start.
+	$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-ProvTask TaskId $($ActiveTask.TaskId)" `
+	-Source "Remove-HostingConnection Script" `
+	-OperationType AdminActivity `
+	-TargetTypes "TaskId $($ActiveTask.TaskId)" `
+	-AdminAddress $AdminAddress
+	
+	Try
+	{
+		If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Remove Provisioning Task'))
+		{
+			Remove-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
+
+			If($?)
+			{
+				$Succeeded = $True
+				Write-Host -ForegroundColor Yellow "Removed task $($ActiveTask.TaskId)"
+			}
+		}
+	}
+	
+	Catch
+	{
+		Write-Warning "Unable to remove task $($ActiveTask.TaskId)"
+	}
+	
+	Finally
+	{
+		# Log high-level operation stop, and indicate its success
+		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+	}
+	
+	#keep looping until all active tasks are found, stopped and removed
+	$ActiveTask = Get-ProvTask -AdminAddress $AdminAddress | Where-Object {$_.hostingunit -eq $RemoveThis.HostingUnitUid -and $_.Active -eq $True}
+	[bool]$ActionStatus = $?
+}
+
+#all tasks have been stopped and removed so now the hosting and resource connections can be removed
+
+#get all resource connections as there can be more than one per hosting connection
+$ResourceConnections = $HostingUnits
+
+If($? -and $Null -ne $ResourceConnections)
+{
+	ForEach($ResourceConnection in $ResourceConnections)
+	{
+		If(($ResourceConnectionOnly -eq $False) -or ($ResourceConnectionOnly -eq $True -and $ResourceConnection.HostingUnitUid -eq $SavedHostingUnitUid))
+		{
+			################################
+			#REMOVE THE RESOURCE CONNECTION#
+			################################
+			
+			$Succeeded = $False #will indicate if the high-level operation was successful
+
+			# Log high-level operation start.
+			$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\HostingUnits\$ResourceConnection" `
+			-Source "Remove-HostingConnection Script" `
+			-OperationType ConfigurationChange `
+			-TargetTypes "xdhyp:\HostingUnits\$ResourceConnection" `
+			-AdminAddress $AdminAddress
+			
+			Try
+			{
+				If($PSCmdlet.ShouldProcess("xdhyp:\HostingUnits\$ResourceConnection",'Remove resource connection'))
 				{
-					If($PSCmdlet.ShouldProcess("xdhyp:\HostingUnits\$ResourceConnection",'Remove resource connection'))
+					Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\HostingUnits\$ResourceConnection" -LoggingId $HighLevelOp.Id -EA 0		
+					
+					If($?)
 					{
-						Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\HostingUnits\$ResourceConnection" -LoggingId $HighLevelOp.Id -EA 0		
-						
-						If($?)
-						{
-							$Succeeded = $True
-							Write-Host -ForegroundColor Yellow "Removed resource connection item xdhyp:\HostingUnits\$ResourceConnection"
-						}
+						$Succeeded = $True
+						Write-Host -ForegroundColor Yellow "Removed resource connection item xdhyp:\HostingUnits\$ResourceConnection"
 					}
 				}
-				
-				Catch
-				{
-					Write-Warning "Unable to remove resource connection item xdhyp:\HostingUnits\$ResourceConnection"
-				}
-				
-				Finally
-				{
-					# Log high-level operation stop, and indicate its success
-					Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
-				}
 			}
-		}
-	}
-	ElseIf($? -and $Null -eq $ResourceConnections)
-	{
-		Write-Host "There were no Resource Connections found"
-	}
-	Else
-	{
-		Write-Host "Unable to retrieve Resource Connections"
-	}
-	
-	#If $ResourceConnectionOnly is $True then do NOT delete the hosting connection or broker hypervisor connection
-	If($ResourceConnectionOnly -eq $False)
-	{
-		###############################
-		#REMOVE THE HOSTING CONNECTION#
-		###############################
-
-		$Succeeded = $False #will indicate if the high-level operation was successful
-
-		# Log high-level operation start.
-		$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\Connections\$RemoveThis" `
-		-Source "Remove-HostingConnection Script" `
-		-OperationType ConfigurationChange `
-		-TargetTypes "xdhyp:\Connections\$RemoveThis" `
-		-AdminAddress $AdminAddress
-		
-		Try
-		{
-			If($PSCmdlet.ShouldProcess("xdhyp:\Connections\$RemoveThis",'Remove hosting connection'))
-			{
-				Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\Connections\$RemoveThis" -LoggingId $HighLevelOp.Id -EA 0		
-				
-				If($?)
-				{
-					$Succeeded = $True
-					Write-Host -ForegroundColor Yellow "Removed hosting connection item xdhyp:\Connections\$RemoveThis"
-				}
-			}
-		}
-		
-		Catch
-		{
-			Write-Warning "Unable to remove hosting connection item xdhyp:\Connections\$RemoveThis"
-		}
-		
-		Finally
-		{
-			# Log high-level operation stop, and indicate its success
-			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
-		}
-		
-		#########################################
-		#REMOVE THE BROKER HYPERVISOR CONNECTION#
-		#########################################
-
-		$Succeeded = $False #will indicate if the high-level operation was successful
-
-		# Log high-level operation start.
-		$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-BrokerHypervisorConnection $RemoveThis" `
-		-Source "Remove-HostingConnection Script" `
-		-OperationType ConfigurationChange `
-		-TargetTypes "$RemoveThis" `
-		-AdminAddress $AdminAddress
-		
-		Try
-		{
-			If($PSCmdlet.ShouldProcess($RemoveThis,'Remove broker hypervisor connection'))
-			{
-				Remove-BrokerHypervisorConnection -Name $RemoveThis -AdminAddress $AdminAddress -LoggingId $HighLevelOp.Id -EA 0	
 			
-				If($?)
-				{
-					$Succeeded = $True
-					Write-Host -ForegroundColor Yellow "Removed Broker Hypervisor Connection $RemoveThis"
-				}
+			Catch
+			{
+				Write-Warning "Unable to remove resource connection item xdhyp:\HostingUnits\$ResourceConnection"
+			}
+			
+			Finally
+			{
+				# Log high-level operation stop, and indicate its success
+				Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
 			}
 		}
-		
-		Catch
-		{
-			Write-Warning "Unable to remove Broker Hypervisor Connection $RemoveThis"
-		}
-		
-		Finally
-		{
-			# Log high-level operation stop, and indicate its success
-			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
-		}
-
 	}
-	##################
-	#SCRIPT COMPLETED#
-	##################
-
-	Write-Host "Script completed"
-	
 }
+ElseIf($? -and $Null -eq $ResourceConnections)
+{
+	Write-Host "There were no Resource Connections found"
+}
+Else
+{
+	Write-Host "Unable to retrieve Resource Connections"
+}
+
+#If $ResourceConnectionOnly is $True then do NOT delete the hosting connection or broker hypervisor connection
+If($ResourceConnectionOnly -eq $False)
+{
+	###############################
+	#REMOVE THE HOSTING CONNECTION#
+	###############################
+
+	$Succeeded = $False #will indicate if the high-level operation was successful
+
+	# Log high-level operation start.
+	$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\Connections\$RemoveThis" `
+	-Source "Remove-HostingConnection Script" `
+	-OperationType ConfigurationChange `
+	-TargetTypes "xdhyp:\Connections\$RemoveThis" `
+	-AdminAddress $AdminAddress
+	
+	Try
+	{
+		If($PSCmdlet.ShouldProcess("xdhyp:\Connections\$RemoveThis",'Remove hosting connection'))
+		{
+			Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\Connections\$RemoveThis" -LoggingId $HighLevelOp.Id -EA 0		
+			
+			If($?)
+			{
+				$Succeeded = $True
+				Write-Host -ForegroundColor Yellow "Removed hosting connection item xdhyp:\Connections\$RemoveThis"
+			}
+		}
+	}
+	
+	Catch
+	{
+		Write-Warning "Unable to remove hosting connection item xdhyp:\Connections\$RemoveThis"
+	}
+	
+	Finally
+	{
+		# Log high-level operation stop, and indicate its success
+		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+	}
+	
+	#########################################
+	#REMOVE THE BROKER HYPERVISOR CONNECTION#
+	#########################################
+
+	$Succeeded = $False #will indicate if the high-level operation was successful
+
+	# Log high-level operation start.
+	$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-BrokerHypervisorConnection $RemoveThis" `
+	-Source "Remove-HostingConnection Script" `
+	-OperationType ConfigurationChange `
+	-TargetTypes "$RemoveThis" `
+	-AdminAddress $AdminAddress
+	
+	Try
+	{
+		If($PSCmdlet.ShouldProcess($RemoveThis,'Remove broker hypervisor connection'))
+		{
+			Remove-BrokerHypervisorConnection -Name $RemoveThis -AdminAddress $AdminAddress -LoggingId $HighLevelOp.Id -EA 0	
+		
+			If($?)
+			{
+				$Succeeded = $True
+				Write-Host -ForegroundColor Yellow "Removed Broker Hypervisor Connection $RemoveThis"
+			}
+		}
+	}
+	
+	Catch
+	{
+		Write-Warning "Unable to remove Broker Hypervisor Connection $RemoveThis"
+	}
+	
+	Finally
+	{
+		# Log high-level operation stop, and indicate its success
+		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+	}
+
+}
+##################
+#SCRIPT COMPLETED#
+##################
+
+Write-Host "Script completed"
 #endregion
