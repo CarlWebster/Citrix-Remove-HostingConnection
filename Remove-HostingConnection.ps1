@@ -441,7 +441,7 @@ If($Null -eq $ActiveTask)
 	Exit
 }
 
-If(!$?)
+If(!$ActionStatus)
 {
 	Write-Error "Unable to retrieve active tasks. Script will close."
 	Exit
