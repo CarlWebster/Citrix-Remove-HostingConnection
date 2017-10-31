@@ -1,5 +1,5 @@
 # Remove-HostingConnection
-		Removes either:
+	Removes either:
 	
 		A hosting connection and all resource connections in a Citrix 
 		XenDesktop 7.xx Site if there are any active provisioning tasks, or
@@ -25,4 +25,23 @@
 	https://4sysops.com/archives/the-powershell-whatif-parameter/
 	https://4sysops.com/archives/confirm-confirmpreference-and-confirmimpact-in-powershell/
 	
-	Thanks to Michael B. Smith for the code review.
+	Thanks to Michael B. Smith for the code review. @essentialexch on Twitter
+	
+	******************************************************************************
+	*   WARNING             WARNING      	       WARNING             WARNING   *
+	******************************************************************************
+	
+	Do not run this script when there are valid active provisioning tasks processing.
+
+	Because of the way the Get-ProvTask cmdlet works, this script retrieves the
+	first task where the Active property is TRUE, regardless of whether the task
+	is a current task or an old task left in the system.
+
+	This script will remove the first active task it finds and then, depending on
+	the -ResourceConnectionOnly switch, will attempt to delete all resource connections 
+	in a hosting connection and then attempt to delete the hosting connection.
+	
+	******************************************************************************
+	*   WARNING             WARNING      	       WARNING             WARNING   *
+	******************************************************************************
+	
