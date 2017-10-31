@@ -38,8 +38,9 @@
 	is a current task or an old task left in the system.
 
 	This script will remove the first active task it finds and then, depending on
-	the -ResourceConnectionOnly switch, will attempt to delete all resource connections 
-	in a hosting connection and then attempt to delete the hosting connection.
+	the -ResourceConnectionOnly switch, will attempt to delete all resource 
+	connections in the specified hosting connection and then attempt to delete the 
+	specified hosting connection.
 	
 	******************************************************************************
 	*   WARNING             WARNING      	       WARNING             WARNING   *
