@@ -4,6 +4,9 @@
 #http://www.CarlWebster.com
 #Created on September 26, 2017
 
+# Version 1.01 6-Nov-2017
+#	When -WhatIf or -Confirm with No or -Confirm with No to All is used, do not log non-actions as failures
+
 # Version 1.0 released to the community on November 2, 2017
 
 ******************************************************************************
