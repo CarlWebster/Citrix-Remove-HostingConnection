@@ -116,9 +116,9 @@
 	http://carlwebster.com/new-powershell-script-remove-hostingconnection-v1-0/
 .NOTES
 	NAME: Remove-HostingConnection.ps1
-	VERSION: 1.00
+	VERSION: 1.01
 	AUTHOR: Carl Webster, Sr. Solutions Architect for Choice Solutions, LLC
-	LASTEDIT: October 31, 2017
+	LASTEDIT: November 6, 2017
 #>
 
 #endregion
@@ -148,6 +148,10 @@ Param(
 #Created on September 26, 2017
 
 # Version 1.0 released to the community on November 2, 2017
+#
+# Version 1.01 6-Nov-2017
+#	When -WhatIf or -Confirm with No or -Confirm with No to All is used, do not log non-actions as failures
+#
 #endregion
 
 #region script setup
@@ -457,19 +461,19 @@ While($ActionStatus -and $Null -ne $ActiveTask)
 	#STOP THE TASK#
 	###############
 	
-	$Succeeded = $False #will indicate if the high-level operation was successful
-	
-	# Log high-level operation start.
-	$HighLevelOp = Start-LogHighLevelOperation -Text "Stop-ProvTask TaskId $($ActiveTask.TaskId)" `
-	-Source "Remove-HostingConnection Script" `
-	-OperationType AdminActivity `
-	-TargetTypes "TaskId $($ActiveTask.TaskId)" `
-	-AdminAddress $AdminAddress
-	
-	Try
+	If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Stop Provisioning Task'))
 	{
-		If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Stop Provisioning Task'))
+		Try
 		{
+			$Succeeded = $False #will indicate if the high-level operation was successful
+			
+			# Log high-level operation start.
+			$HighLevelOp = Start-LogHighLevelOperation -Text "Stop-ProvTask TaskId $($ActiveTask.TaskId)" `
+			-Source "Remove-HostingConnection Script" `
+			-OperationType AdminActivity `
+			-TargetTypes "TaskId $($ActiveTask.TaskId)" `
+			-AdminAddress $AdminAddress
+			
 			Stop-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
 			
 			If($?)
@@ -478,36 +482,36 @@ While($ActionStatus -and $Null -ne $ActiveTask)
 				Write-Host -ForegroundColor Yellow "Stopped task $($ActiveTask.TaskId)"
 			}
 		}
-	}
-	
-	Catch
-	{
-		Write-Warning "Unable to stop task $($ActiveTask.TaskId)"
-	}
-	
-	Finally
-	{
-		# Log high-level operation stop, and indicate its success
-		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+		
+		Catch
+		{
+			Write-Warning "Unable to stop task $($ActiveTask.TaskId)"
+		}
+		
+		Finally
+		{
+			# Log high-level operation stop, and indicate its success
+			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress
+		}
 	}
 	
 	#################
 	#REMOVE THE TASK#
 	#################
 
-	$Succeeded = $False #will indicate if the high-level operation was successful
-
-	# Log high-level operation start.
-	$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-ProvTask TaskId $($ActiveTask.TaskId)" `
-	-Source "Remove-HostingConnection Script" `
-	-OperationType AdminActivity `
-	-TargetTypes "TaskId $($ActiveTask.TaskId)" `
-	-AdminAddress $AdminAddress
-	
-	Try
+	If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Remove Provisioning Task'))
 	{
-		If($PSCmdlet.ShouldProcess($ActiveTask.TaskId,'Remove Provisioning Task'))
+		Try
 		{
+			$Succeeded = $False #will indicate if the high-level operation was successful
+
+			# Log high-level operation start.
+			$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-ProvTask TaskId $($ActiveTask.TaskId)" `
+			-Source "Remove-HostingConnection Script" `
+			-OperationType AdminActivity `
+			-TargetTypes "TaskId $($ActiveTask.TaskId)" `
+			-AdminAddress $AdminAddress
+			
 			Remove-ProvTask -TaskId $ActiveTask.TaskId -LoggingId $HighLevelOp.Id -AdminAddress $AdminAddress -EA 0 4>$Null
 
 			If($?)
@@ -516,17 +520,17 @@ While($ActionStatus -and $Null -ne $ActiveTask)
 				Write-Host -ForegroundColor Yellow "Removed task $($ActiveTask.TaskId)"
 			}
 		}
-	}
-	
-	Catch
-	{
-		Write-Warning "Unable to remove task $($ActiveTask.TaskId)"
-	}
-	
-	Finally
-	{
-		# Log high-level operation stop, and indicate its success
-		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+		
+		Catch
+		{
+			Write-Warning "Unable to remove task $($ActiveTask.TaskId)"
+		}
+		
+		Finally
+		{
+			# Log high-level operation stop, and indicate its success
+			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress
+		}
 	}
 	
 	#keep looping until all active tasks are found, stopped and removed
@@ -549,19 +553,20 @@ If($? -and $Null -ne $ResourceConnections)
 			#REMOVE THE RESOURCE CONNECTION#
 			################################
 			
-			$Succeeded = $False #will indicate if the high-level operation was successful
-
-			# Log high-level operation start.
-			$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\HostingUnits\$ResourceConnection" `
-			-Source "Remove-HostingConnection Script" `
-			-OperationType ConfigurationChange `
-			-TargetTypes "xdhyp:\HostingUnits\$ResourceConnection" `
-			-AdminAddress $AdminAddress
 			
-			Try
+			If($PSCmdlet.ShouldProcess("xdhyp:\HostingUnits\$ResourceConnection",'Remove resource connection'))
 			{
-				If($PSCmdlet.ShouldProcess("xdhyp:\HostingUnits\$ResourceConnection",'Remove resource connection'))
+				Try
 				{
+					$Succeeded = $False #will indicate if the high-level operation was successful
+
+					# Log high-level operation start.
+					$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\HostingUnits\$ResourceConnection" `
+					-Source "Remove-HostingConnection Script" `
+					-OperationType ConfigurationChange `
+					-TargetTypes "xdhyp:\HostingUnits\$ResourceConnection" `
+					-AdminAddress $AdminAddress
+					
 					Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\HostingUnits\$ResourceConnection" -LoggingId $HighLevelOp.Id -EA 0		
 					
 					If($?)
@@ -570,17 +575,17 @@ If($? -and $Null -ne $ResourceConnections)
 						Write-Host -ForegroundColor Yellow "Removed resource connection item xdhyp:\HostingUnits\$ResourceConnection"
 					}
 				}
-			}
-			
-			Catch
-			{
-				Write-Warning "Unable to remove resource connection item xdhyp:\HostingUnits\$ResourceConnection"
-			}
-			
-			Finally
-			{
-				# Log high-level operation stop, and indicate its success
-				Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+				
+				Catch
+				{
+					Write-Warning "Unable to remove resource connection item xdhyp:\HostingUnits\$ResourceConnection"
+				}
+				
+				Finally
+				{
+					# Log high-level operation stop, and indicate its success
+					Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress
+				}
 			}
 		}
 	}
@@ -601,19 +606,20 @@ If($ResourceConnectionOnly -eq $False)
 	#REMOVE THE HOSTING CONNECTION#
 	###############################
 
-	$Succeeded = $False #will indicate if the high-level operation was successful
-
-	# Log high-level operation start.
-	$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\Connections\$RemoveThis" `
-	-Source "Remove-HostingConnection Script" `
-	-OperationType ConfigurationChange `
-	-TargetTypes "xdhyp:\Connections\$RemoveThis" `
-	-AdminAddress $AdminAddress
 	
-	Try
+	If($PSCmdlet.ShouldProcess("xdhyp:\Connections\$RemoveThis",'Remove hosting connection'))
 	{
-		If($PSCmdlet.ShouldProcess("xdhyp:\Connections\$RemoveThis",'Remove hosting connection'))
+		Try
 		{
+			$Succeeded = $False #will indicate if the high-level operation was successful
+
+			# Log high-level operation start.
+			$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-Item xdhyp:\Connections\$RemoveThis" `
+			-Source "Remove-HostingConnection Script" `
+			-OperationType ConfigurationChange `
+			-TargetTypes "xdhyp:\Connections\$RemoveThis" `
+			-AdminAddress $AdminAddress
+			
 			Remove-Item -AdminAddress $AdminAddress -path "xdhyp:\Connections\$RemoveThis" -LoggingId $HighLevelOp.Id -EA 0		
 			
 			If($?)
@@ -622,36 +628,36 @@ If($ResourceConnectionOnly -eq $False)
 				Write-Host -ForegroundColor Yellow "Removed hosting connection item xdhyp:\Connections\$RemoveThis"
 			}
 		}
-	}
-	
-	Catch
-	{
-		Write-Warning "Unable to remove hosting connection item xdhyp:\Connections\$RemoveThis"
-	}
-	
-	Finally
-	{
-		# Log high-level operation stop, and indicate its success
-		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
+		
+		Catch
+		{
+			Write-Warning "Unable to remove hosting connection item xdhyp:\Connections\$RemoveThis"
+		}
+		
+		Finally
+		{
+			# Log high-level operation stop, and indicate its success
+			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress
+		}
 	}
 	
 	#########################################
 	#REMOVE THE BROKER HYPERVISOR CONNECTION#
 	#########################################
 
-	$Succeeded = $False #will indicate if the high-level operation was successful
-
-	# Log high-level operation start.
-	$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-BrokerHypervisorConnection $RemoveThis" `
-	-Source "Remove-HostingConnection Script" `
-	-OperationType ConfigurationChange `
-	-TargetTypes "$RemoveThis" `
-	-AdminAddress $AdminAddress
 	
-	Try
+	If($PSCmdlet.ShouldProcess($RemoveThis,'Remove broker hypervisor connection'))
 	{
-		If($PSCmdlet.ShouldProcess($RemoveThis,'Remove broker hypervisor connection'))
+		Try
 		{
+			$Succeeded = $False #will indicate if the high-level operation was successful
+
+			# Log high-level operation start.
+			$HighLevelOp = Start-LogHighLevelOperation -Text "Remove-BrokerHypervisorConnection $RemoveThis" `
+			-Source "Remove-HostingConnection Script" `
+			-OperationType ConfigurationChange `
+			-TargetTypes "$RemoveThis" `
+			-AdminAddress $AdminAddress
 			Remove-BrokerHypervisorConnection -Name $RemoveThis -AdminAddress $AdminAddress -LoggingId $HighLevelOp.Id -EA 0	
 		
 			If($?)
@@ -660,19 +666,18 @@ If($ResourceConnectionOnly -eq $False)
 				Write-Host -ForegroundColor Yellow "Removed Broker Hypervisor Connection $RemoveThis"
 			}
 		}
+		
+		Catch
+		{
+			Write-Warning "Unable to remove Broker Hypervisor Connection $RemoveThis"
+		}
+		
+		Finally
+		{
+			# Log high-level operation stop, and indicate its success
+			Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress
+		}
 	}
-	
-	Catch
-	{
-		Write-Warning "Unable to remove Broker Hypervisor Connection $RemoveThis"
-	}
-	
-	Finally
-	{
-		# Log high-level operation stop, and indicate its success
-		Stop-LogHighLevelOperation -HighLevelOperationId $HighLevelOp.Id -IsSuccessful $Succeeded -AdminAddress $AdminAddress			
-	}
-
 }
 ##################
 #SCRIPT COMPLETED#
