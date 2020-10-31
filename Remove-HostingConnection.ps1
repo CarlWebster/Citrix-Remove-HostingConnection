@@ -117,7 +117,7 @@
 .NOTES
 	NAME: Remove-HostingConnection.ps1
 	VERSION: 1.01
-	AUTHOR: Carl Webster, Sr. Solutions Architect for Choice Solutions, LLC
+	AUTHOR: Carl Webster
 	LASTEDIT: November 6, 2017
 #>
 
@@ -143,7 +143,6 @@ Param(
 #region script change log	
 #webster@carlwebster.com
 #@carlwebster on Twitter
-#Sr. Solutions Architect for Choice Solutions, LLC
 #http://www.CarlWebster.com
 #Created on September 26, 2017
 
